@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/csBenClarkson/url-shortener/logger"
+	"github.com/csBenClarkson/url-shortener/store"
 	"github.com/gin-gonic/gin"
 	"github.com/lmittmann/tint"
 )
@@ -15,11 +16,22 @@ import (
 func main() {
 	var debug bool
 	var logPath string
+	var redisHost string
+	var redisPort string
+	var redisPass string
+	var redisDB int
+	var sqliteFile string
 
-	flag.BoolVar(&debug, "debug", true, "Enable debug mode.")
-	flag.StringVar(&logPath, "logPath", "log", "Directory to store log files.")
+	flag.BoolVar(&debug, "debug", true, "Enable debug mode. Default: true")
+	flag.StringVar(&logPath, "logPath", "log", "Directory to store log files. Default: ./log")
+	flag.StringVar(&redisHost, "redisHost", "127.0.0.1", "Redis server host address. Default: 127.0.0.1")
+	flag.StringVar(&redisPort, "redisPort", "6379", "Redis server port. Default: 6379")
+	flag.StringVar(&redisPass, "redisPass", "", "Redis server password. Default: <empty>")
+	flag.IntVar(&redisDB, "redisDB", 0, "Which redis database is used. Default: 0")
+	flag.StringVar(&sqliteFile, "sqliteFile", "data.db", "Database file for sqlite3. Default: ./data.db")
 	flag.Parse()
 
+	// Setting up loggers
 	if debug {
 		file := logger.CreateLogFile(logPath)
 		defer func(file *os.File) {
@@ -33,6 +45,25 @@ func main() {
 	}
 	textHandler := tint.NewHandler(os.Stdout, nil)
 	slog.SetDefault(slog.New(textHandler))
+
+	store := store.Storage{
+		RedisHost: redisHost,
+		RedisPort: redisPort,
+		RedisPass: redisPass,
+		RedisDB: redisDB,
+		RedisClient: nil,
+
+		SqliteFile: sqliteFile,
+		SqliteClient: nil,
+	}
+
+	err := store.InitDB()
+	if err != nil {
+		slog.Error("Error when initializing databases. Exit...")
+		os.Exit(1)
+	}
+	defer store.RedisClient.Close()
+	defer store.SqliteClient.Close()
 
 	r := gin.Default()
 	r.GET("/", func(c *gin.Context) {
