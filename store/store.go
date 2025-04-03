@@ -47,6 +47,11 @@ func (s Storage) InitDB() error {
 		slog.Error("Failed to open or create Sqlite3 database file.")
 		return err
 	}
+	err = checkSQLiteReachable(ctx, s.SqliteClient)
+	if err != nil {
+		slog.Error("Cannot connect to Sqlite3. All attempts failed.")
+		return err
+	}
 	slog.Debug("Databases are alive!")
 
 	err = createSqliteTableIndex(s.SqliteClient)
@@ -102,15 +107,29 @@ func createSqliteTableIndex(client *sql.DB) error {
 // GetOriginalLink return the corresponding URL according to the short digest
 // It first find if the digest appears as a key in Redis.
 // Then it retrive URL from redis if it exists, otherwise from MySQL.
-func (s Storage) GetOriginalLink(ctx context.Context, short string) (string, error) {
-	val, err := s.RedisClient.Get(ctx, short).Result()
+// It returns error only when record does not exist on either databases.
+func (s Storage) GetOriginalURL(ctx context.Context, digest string) (string, error) {
+	val, err := s.RedisClient.Get(ctx, digest).Result()
 	if err == nil {
 		return val, nil
 	}
+	return s.getFromSqlite(ctx, digest)
 }
 
-func (s Storage) getFromSqlite(ctx context.Context, digest string) (val string, err error) {
-	link := ""
-	row := s.SqliteClient.QueryRow("SELECT url FROM shortener LIMIT 1 WHERE digest = ?", digest)
-	err := row.Scan(&link)
+func (s Storage) getFromSqlite(ctx context.Context, digest string) (string, error) {
+	url := ""
+	row := s.SqliteClient.QueryRowContext(ctx, "SELECT url FROM shortener LIMIT 1 WHERE digest = ?", digest)
+	err := row.Scan(&url)
+	if err != nil {
+		return "", err
+	}
+	return url, nil
+}
+
+// StoreURL sets up a mapping from the original URL to a generated digest,
+// store it into databases, and return the digest.
+// MurMur -> number -> 62-radix -> string
+// Bloom Fliter on Redis
+func StoreURL(ctx context.Context, url string) (string, error) {
+
 }
