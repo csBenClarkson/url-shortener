@@ -3,10 +3,12 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-
+	"github.com/mattn/go-sqlite3"
 	"log/slog"
 	"net"
+	"time"
 
 	"github.com/avast/retry-go"
 	_ "github.com/mattn/go-sqlite3"
@@ -23,6 +25,13 @@ type Storage struct {
 	SqliteFile   string
 	SqliteClient *sql.DB
 }
+
+var ErrURLExists = errors.New("the URL had existed")
+var ErrNoSuchRecord = errors.New("cannot find the mapping")
+var ErrDBFails = errors.New("database connection error")
+var ErrTooLucky = errors.New("duplicate keys after hash with salt")
+
+const redisNamespace = "urlshortener:"
 
 // InitDB initialize Redis and Sqlite, try connecting to them and return error if something fatal happened.
 func (s Storage) InitDB() error {
@@ -94,10 +103,10 @@ func checkSQLiteReachable(ctx context.Context, client *sql.DB) error {
 }
 
 func createSqliteTableIndex(client *sql.DB) error {
-	sqlStmt := `CREATE TABLE IF NOT EXISTS Shortener (id INT PRIMARY KEY AUTOINCREMENT, 
-													  url TEXT NOT NULL,
+	sqlStmt := `CREATE TABLE IF NOT EXISTS Shortener (url TEXT PRIMARY KEY,
 													  digest TEXT NOT NULL,
-													  date DATETIME NOT NULL);
+													  date DATETIME NOT NULL,
+													  collide BOOLEAN);
 				CREATE UNIQUE INDEX idx_digest ON TABLE Shortener (digest);`
 	_, err := client.Exec(sqlStmt)
 	return err
@@ -108,7 +117,7 @@ func createSqliteTableIndex(client *sql.DB) error {
 // Then it retrive URL from redis if it exists, otherwise from MySQL.
 // It returns error only when record does not exist on either databases.
 func (s Storage) GetOriginalURL(ctx context.Context, digest string) (string, error) {
-	val, err := s.RedisClient.Get(ctx, digest).Result()
+	val, err := s.RedisClient.Get(ctx, redisNamespace+digest).Result()
 	if err == nil {
 		return val, nil
 	}
@@ -117,18 +126,117 @@ func (s Storage) GetOriginalURL(ctx context.Context, digest string) (string, err
 
 func (s Storage) getFromSqlite(ctx context.Context, digest string) (string, error) {
 	url := ""
-	row := s.SqliteClient.QueryRowContext(ctx, "SELECT url FROM shortener LIMIT 1 WHERE digest = ?", digest)
+	row := s.SqliteClient.QueryRowContext(ctx, "SELECT url FROM shortener WHERE digest = ? LIMIT 1", digest)
 	err := row.Scan(&url)
 	if err != nil {
-		return "", err
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrNoSuchRecord
+		}
+		return "", ErrDBFails
 	}
 	return url, nil
 }
 
-// StoreURL sets up a mapping from the original URL to a generated digest,
-// store it into databases, and return the digest.
-// MurMur -> number -> 62-radix -> string
-// Bloom Fliter on Redis
-func StoreURL(ctx context.Context, url string) (string, error) {
+// StoreURL sets up a mapping from the original URL to a generated digest, and store it into both databases.
+// It returns the digest and error.
+func (s Storage) StoreURL(ctx context.Context, url string) (string, error) {
+	urlExist, err := s.checkURLExist(ctx, url)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", ErrDBFails, err)
+	}
 
+	var digest string
+	if !urlExist {
+		digest = GenerateDigest(url)
+		digestExist, err := s.checkDigestExist(ctx, digest)
+		if err != nil {
+			return "", fmt.Errorf("%w: %v", ErrDBFails, err)
+		}
+
+		var now time.Time
+		if digestExist {
+			now = time.Now()
+			digest = GenerateDigest(url + now.String())
+		}
+
+		err = s.storeToSqlite(ctx, url, digest, now, digestExist)
+		if err != nil {
+			var sqliteErr sqlite3.Error
+			if errors.As(err, &sqliteErr) {
+				// Break unique key constrain
+				if sqliteErr.Code == sqlite3.ErrConstraint && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+					return "", ErrTooLucky
+				}
+			}
+			return "", fmt.Errorf("%w: %v", ErrDBFails, err)
+		}
+
+		err = s.storeToRedis(ctx, url, digest)
+		if err != nil {
+			return "", fmt.Errorf("%w: %v", ErrDBFails, err)
+		}
+
+	} else {
+		return "", ErrURLExists
+	}
+
+	return digest, nil
+}
+
+// checkURLExist check if a URL is in Sqlite3 database, return a boolean and an error.
+// Error occurs only when database connection goes wrong.
+// The value of the boolean should be omitted if error occurs.
+func (s Storage) checkURLExist(ctx context.Context, url string) (bool, error) {
+	urlBFExist, err := s.RedisClient.BFExists(ctx, "url_filter", url).Result()
+	if err != nil {
+		return true, err
+	}
+
+	if urlBFExist {
+		err = s.SqliteClient.QueryRowContext(ctx, "SELECT url FROM shortener WHERE url = ?", url).Scan()
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, nil
+			}
+			return true, err
+		} else {
+			return true, nil
+		}
+	} else {
+		return false, nil
+	}
+}
+
+// checkDigestExist check if a digest is in Sqlite3 database, return a boolean and an error.
+// Error occurs only when database connection goes wrong.
+// The value of the boolean should be omitted if error occurs.
+func (s Storage) checkDigestExist(ctx context.Context, digest string) (bool, error) {
+	digestBFExist, err := s.RedisClient.BFExists(ctx, "digest_filter", digest).Result()
+	if err != nil {
+		return false, err
+	}
+
+	if digestBFExist {
+		err = s.SqliteClient.QueryRowContext(ctx, "SELECT digest FROM shortener WHERE digest = ?", digest).Scan()
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, nil
+			}
+			return true, err
+		} else {
+			return true, nil
+		}
+	} else {
+		return false, nil
+	}
+}
+
+func (s Storage) storeToSqlite(ctx context.Context, url string, digest string, date time.Time, collide bool) error {
+	_, err := s.SqliteClient.ExecContext(ctx, "INSERT INTO shortener (url, digest, date) VALUES (?, ?, ?, ?)", url, digest, date, collide)
+	return err
+}
+
+func (s Storage) storeToRedis(ctx context.Context, url string, digest string) error {
+	err := s.RedisClient.Set(ctx, redisNamespace+digest, url, 2*time.Hour).Err()
+	return err
 }
