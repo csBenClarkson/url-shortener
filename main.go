@@ -46,18 +46,9 @@ func main() {
 	textHandler := tint.NewHandler(os.Stdout, nil)
 	slog.SetDefault(slog.New(textHandler))
 
-	storage := store.Storage{
-		RedisHost:   redisHost,
-		RedisPort:   redisPort,
-		RedisPass:   redisPass,
-		RedisDB:     redisDB,
-		RedisClient: nil,
+	storage := store.Storage{}
 
-		SqliteFile:   sqliteFile,
-		SqliteClient: nil,
-	}
-
-	err := storage.InitDB()
+	err := storage.InitDB(redisHost, redisPort, redisPass, redisDB, sqliteFile)
 	if err != nil {
 		slog.Error("Error when initializing databases. Exit...")
 		os.Exit(1)

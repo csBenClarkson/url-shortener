@@ -16,13 +16,7 @@ import (
 )
 
 type Storage struct {
-	RedisHost   string
-	RedisPort   string
-	RedisPass   string
-	RedisDB     int
-	RedisClient *redis.Client
-
-	SqliteFile   string
+	RedisClient  *redis.Client
 	SqliteClient *sql.DB
 }
 
@@ -34,12 +28,12 @@ var ErrTooLucky = errors.New("duplicate keys after hash with salt")
 const redisNamespace = "urlshortener:"
 
 // InitDB initialize Redis and Sqlite, try connecting to them and return error if something fatal happened.
-func (s Storage) InitDB() error {
+func (s Storage) InitDB(redisHost string, redisPort string, redisPass string, redisDB int, sqliteFile string) error {
 	slog.Info("Initializing databases...")
 	s.RedisClient = redis.NewClient(&redis.Options{
-		Addr:     net.JoinHostPort(s.RedisHost, s.RedisPort),
-		Password: s.RedisPass,
-		DB:       s.RedisDB,
+		Addr:     net.JoinHostPort(redisHost, redisPort),
+		Password: redisPass,
+		DB:       redisDB,
 	})
 	ctx := context.Background()
 
@@ -51,7 +45,7 @@ func (s Storage) InitDB() error {
 	}
 
 	slog.Debug("Check if Sqlite3 is reachable.")
-	s.SqliteClient, err = sql.Open("sqlite3", s.SqliteFile)
+	s.SqliteClient, err = sql.Open("sqlite3", sqliteFile)
 	if err != nil {
 		slog.Error("Failed to open or create Sqlite3 database file.")
 		return err
