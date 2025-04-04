@@ -61,7 +61,6 @@ func (s Storage) InitDB() error {
 	}
 
 	slog.Info("Create table and index in Sqlite3 sucessfully!")
-	slog.Info("Databases are initialized successfully!")
 
 	return nil
 }
@@ -104,8 +103,8 @@ func createSqliteTableIndex(client *sql.DB) error {
 	return err
 }
 
-// GetOriginalLink return the corresponding URL according to the short digest
-// It first find if the digest appears as a key in Redis.
+// GetOriginalURL return the corresponding URL according to the short digest
+// It first finds if the digest appears as a key in Redis.
 // Then it retrive URL from redis if it exists, otherwise from MySQL.
 // It returns error only when record does not exist on either databases.
 func (s Storage) GetOriginalURL(ctx context.Context, digest string) (string, error) {
