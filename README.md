@@ -1,6 +1,8 @@
 # URL Shortener
 A simple and efficient URL shortener service written in Go, using the Gin web framework, Redis for caching, and SQLite3 for persistent storage.
 
+This project is inspired by Eddy WM's [go-shortener-wm](https://github.com/eddywm/go-shortener-wm).
+
 ## Prerequisites
 - Go 1.21+
 - Redis server with Bloom Filter module
