@@ -1,0 +1,114 @@
+<!-- templates/shorten.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Shorten Your URL</title>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            color: #343a40;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 75%;
+            margin: 5vh auto 0 auto;
+            text-align: center;
+            padding: 2rem;
+        }
+        h1 {
+            font-size: 5rem;
+            margin-bottom: 1em;
+            color: #007bff;
+        }
+        form {
+            max-width: 600px;
+            margin: -5vh auto 0 auto;
+            text-align: center;
+        }
+        button {
+            margin-top: 3vh;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        p {
+            font-size: 1.25rem;
+            color: #6c757d;
+            margin-top: 0;
+        }
+        .footer {
+            color: white;
+            text-align: center;
+            padding-bottom: 1rem;
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Shorten Your URL</h1>
+</div>
+<div>
+    <form id="shorten-form">
+        <input type="text" id="url" name="url" placeholder="Enter your long URL here" required />
+        <button type="submit">Shorten</button>
+    </form>
+    <div id="result" style="margin-top: 5vh;"></div>
+</div>
+
+<div class="footer">
+    <p>&copy; 2025 Ben. All rights reserved.</p>
+</div>
+
+<script>
+    document.getElementById("shorten-form").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const url = document.getElementById("url").value;
+        fetch("/admin/register", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ url: url })
+        })
+            .then(response => response.json())
+            .then(data => {
+                const resultDiv = document.getElementById("result");
+                if (data.result === "ok") {
+                    resultDiv.innerHTML = `<p>Your short link: <a href="${window.location.origin + "/" + data.digest}" target="_blank">${window.location.origin + "/" + data.digest}</a></p>`;
+                } else if (data.result === "URL already exists") {
+                    resultDiv.innerHTML = `<p style="color: red;">The URL has been registered.</p>`;
+                } else if (data.result === "Too lucky") {
+                    resultDiv.innerHTML = `<p style="color: green;">${data.detail}</p>`;
+                }
+            })
+            .catch(error => {
+                document.getElementById("result").innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            });
+    });
+</script>
+</body>
+</html>

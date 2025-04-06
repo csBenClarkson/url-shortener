@@ -5,7 +5,7 @@ import (
 	"slices"
 )
 
-const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+const chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const RADIX = 62
 
 func GenerateDigest(url string) string {

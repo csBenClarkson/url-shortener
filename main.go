@@ -2,19 +2,20 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
 	"log/slog"
 	"os"
 
 	"github.com/csBenClarkson/url-shortener/logger"
+	"github.com/csBenClarkson/url-shortener/router"
 	"github.com/csBenClarkson/url-shortener/store"
-	"github.com/gin-gonic/gin"
 	"github.com/lmittmann/tint"
+	"github.com/samber/slog-multi"
 )
 
 func main() {
 	var debug bool
+	var host string
+	var port string
 	var logPath string
 	var redisHost string
 	var redisPort string
@@ -23,6 +24,8 @@ func main() {
 	var sqliteFile string
 
 	flag.BoolVar(&debug, "debug", true, "Enable debug mode. Default: true")
+	flag.StringVar(&host, "host", "127.0.0.1", "Host address to run the shortener server.")
+	flag.StringVar(&port, "port", "9008", "Port to run the shortener server.")
 	flag.StringVar(&logPath, "logPath", "log", "Directory to store log files. Default: ./log")
 	flag.StringVar(&redisHost, "redisHost", "127.0.0.1", "Redis server host address. Default: 127.0.0.1")
 	flag.StringVar(&redisPort, "redisPort", "6379", "Redis server port. Default: 6379")
@@ -32,21 +35,31 @@ func main() {
 	flag.Parse()
 
 	// Setting up loggers
-	if debug {
-		file := logger.CreateLogFile(logPath)
-		defer func(file *os.File) {
-			err := file.Close()
-			if err != nil {
-				log.Fatal(err)
-			}
-		}(file)
-		jsonHandler := slog.NewJSONHandler(file, nil)
-		slog.SetDefault(slog.New(jsonHandler))
-	}
-	textHandler := tint.NewHandler(os.Stdout, nil)
-	slog.SetDefault(slog.New(textHandler))
+	coreLog := logger.CreateLogFile(logPath, "core.log")
+	webLog := logger.CreateLogFile(logPath, "web.log")
+	defer coreLog.Close()
+	defer webLog.Close()
 
-	storage := store.Storage{}
+	jsonHandlerCore := slog.NewJSONHandler(coreLog, nil)
+	jsonHandlerWeb := slog.NewJSONHandler(webLog, nil)
+
+	var webLogger *slog.Logger
+	var coreLogger *slog.Logger
+
+	if debug {
+		textHandlerCore := tint.NewHandler(os.Stdout, nil)
+		textHandlerWeb := tint.NewHandler(os.Stdout, nil)
+
+		webLogger = slog.New(slogmulti.Fanout(jsonHandlerWeb, textHandlerWeb))
+		coreLogger = slog.New(slogmulti.Fanout(jsonHandlerCore, textHandlerCore))
+		slog.SetDefault(coreLogger)
+	} else {
+		webLogger = slog.New(jsonHandlerWeb)
+		coreLogger = slog.New(jsonHandlerCore)
+		slog.SetDefault(coreLogger)
+	}
+
+	storage := &store.Storage{}
 
 	err := storage.InitDB(redisHost, redisPort, redisPass, redisDB, sqliteFile)
 	if err != nil {
@@ -57,15 +70,10 @@ func main() {
 	defer storage.SqliteClient.Close()
 	slog.Info("Databases are initialized successfully!")
 
-	r := gin.Default()
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Hello Go URL-shortener!",
-		})
-	})
-
-	err := r.Run(":9008")
+	r := router.SetupRouter(webLogger, storage)
+	err = r.Run(host + ":" + port)
 	if err != nil {
-		panic(fmt.Sprint("Failed to start web server. Error: %v", err))
+		slog.Error("Failed to start the web server. Error: %v", err)
+		os.Exit(1)
 	}
 }
