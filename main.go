@@ -9,7 +9,7 @@ import (
 	"github.com/csBenClarkson/url-shortener/router"
 	"github.com/csBenClarkson/url-shortener/store"
 	"github.com/lmittmann/tint"
-	"github.com/samber/slog-multi"
+	slogmulti "github.com/samber/slog-multi"
 )
 
 func main() {
@@ -23,15 +23,15 @@ func main() {
 	var redisDB int
 	var sqliteFile string
 
-	flag.BoolVar(&debug, "debug", true, "Enable debug mode. Default: true")
+	flag.BoolVar(&debug, "debug", true, "Enable debug mode")
 	flag.StringVar(&host, "host", "127.0.0.1", "Host address to run the shortener server.")
 	flag.StringVar(&port, "port", "9008", "Port to run the shortener server.")
-	flag.StringVar(&logPath, "logPath", "log", "Directory to store log files. Default: ./log")
-	flag.StringVar(&redisHost, "redisHost", "127.0.0.1", "Redis server host address. Default: 127.0.0.1")
-	flag.StringVar(&redisPort, "redisPort", "6379", "Redis server port. Default: 6379")
-	flag.StringVar(&redisPass, "redisPass", "", "Redis server password. Default: <empty>")
-	flag.IntVar(&redisDB, "redisDB", 0, "Which redis database is used. Default: 0")
-	flag.StringVar(&sqliteFile, "sqliteFile", "data.db", "Database file for sqlite3. Default: ./data.db")
+	flag.StringVar(&logPath, "logPath", "log", "Directory to store log files.")
+	flag.StringVar(&redisHost, "redisHost", "127.0.0.1", "Redis server host address.")
+	flag.StringVar(&redisPort, "redisPort", "6379", "Redis server port.")
+	flag.StringVar(&redisPass, "redisPass", "", "Redis server password. (default <empty>)")
+	flag.IntVar(&redisDB, "redisDB", 0, "Which redis database is used. (default 0)")
+	flag.StringVar(&sqliteFile, "sqliteFile", "data.db", "Database file for sqlite3.")
 	flag.Parse()
 
 	// Setting up loggers
