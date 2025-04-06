@@ -16,15 +16,8 @@ func CreateLogFile(logPath string, fileName string) *os.File {
 	}
 
 	logFile := filepath.Join(logPath, fileName)
-	file, err := os.Open(logFile)
-	if os.IsNotExist(err) {
-		f, e := os.Create(filepath.Join(logPath, fileName))
-		if e != nil {
-			fmt.Printf("Fatal: Cannot create log file %v\n", logFile)
-			os.Exit(1)
-		}
-		file = f
-	} else if err != nil {
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
 		fmt.Printf("Fatal: Cannot open log file %v\n", logFile)
 		os.Exit(1)
 	}
