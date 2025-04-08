@@ -36,6 +36,12 @@ func (m storageModel) getURLEndpoint(c *gin.Context) {
 	c.Redirect(http.StatusFound, "https://"+url)
 }
 
+func getLogin(c *gin.Context) {
+	c.HTML(http.StatusOK, "login.html", nil)
+}
+
+func postLogin(c *gin.Context) {}
+
 func getRegisterURL(c *gin.Context) {
 	c.HTML(http.StatusOK, "register.html", nil)
 }
