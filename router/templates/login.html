@@ -1,10 +1,10 @@
-<!-- templates/shorten.html -->
+<!-- templates/login.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Shorten Your URL</title>
+    <title>Login - URL Shortener</title>
     <style>
         body {
             background-color: #f8f9fa;
@@ -14,7 +14,7 @@
             padding: 0;
         }
         .container {
-            max-width: 75%;
+            max-width: 600px;
             margin: 5vh auto 0 auto;
             text-align: center;
             padding: 2rem;
@@ -24,23 +24,16 @@
             margin-bottom: 1em;
             color: #007bff;
         }
-        form {
-            max-width: 600px;
-            margin: -5vh auto 0 auto;
-            text-align: center;
-        }
-        button {
-            margin-top: 3vh;
-        }
-        input[type="text"] {
+        input[type="password"] {
             width: 100%;
             padding: 0.75rem;
-            margin-bottom: 1rem;
+            margin: -5vh auto 0 auto;
             font-size: 1rem;
             border: 1px solid #ced4da;
             border-radius: 5px;
         }
         button {
+            margin-top: 3vh;
             background-color: #28a745;
             color: white;
             padding: 0.75rem 1.5rem;
@@ -73,14 +66,12 @@
 </head>
 <body>
 <div class="container">
-    <h1>Shorten Your URL</h1>
-</div>
-<div>
-    <form id="shorten-form">
-        <input type="text" id="url" name="url" placeholder="Enter your long URL here" required />
-        <button type="submit">Shorten</button>
+    <h1>URL Shortener Login</h1>
+    <form id="login-form">
+        <input type="password" id="password" name="password" placeholder="Enter your password" required />
+        <button type="submit">Login</button>
     </form>
-    <div id="result" style="margin-top: 5vh;"></div>
+    <div id="result"></div>
 </div>
 
 <div class="footer">
@@ -88,34 +79,34 @@
 </div>
 
 <script>
-    document.getElementById("shorten-form").addEventListener("submit", function(e) {
+    document.getElementById("login-form").addEventListener("submit", function (e) {
         e.preventDefault();
-        const url = document.getElementById("url").value;
-        fetch("/admin/register", {
+        const password = document.getElementById("password").value;
+
+        fetch("/admin/login", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ url: url })
+            body: JSON.stringify({ password: password })
         })
             .then(response => response.json())
             .then(data => {
                 const resultDiv = document.getElementById("result");
-                if (data.result === "ok") {
-                    resultDiv.innerHTML = `<p>Your short link: <a href="${window.location.origin + "/" + data.digest}" target="_blank">${window.location.origin + "/" + data.digest}</a></p>`;
-                } else if (data.result === "URL already exists") {
-                    resultDiv.innerHTML = `<p style="color: red;">The URL has been registered.</p>
-                                           <p>Your short link: <a href="${window.location.origin + "/" + data.digest}" target="_blank">${window.location.origin + "/" + data.digest}</a></p>`;
-                } else if (data.result === "Too lucky") {
-                    resultDiv.innerHTML = `<p style="color: green;">${data.detail}</p>`;
-                } else {
+                if (data.result === "ok" && data.redirect) {
+                    window.location.href = data.redirect;
+                }
+                if (data.result === "err") {
                     resultDiv.innerHTML = `<p style="color: red;">${data.detail}</p>`;
                 }
             })
-            .catch(error => {
-                document.getElementById("result").innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            .catch(err => {
+                document.getElementById("result").innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
             });
     });
 </script>
+
 </body>
 </html>
+
+

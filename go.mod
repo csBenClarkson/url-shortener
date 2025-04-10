@@ -5,6 +5,7 @@ go 1.24.1
 require (
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/gin-gonic/gin v1.10.0
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/lmittmann/tint v1.0.7
 	github.com/mattn/go-sqlite3 v1.14.26
 	github.com/redis/go-redis/v9 v9.7.3

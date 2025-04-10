@@ -70,6 +70,13 @@ func main() {
 	defer storage.SqliteClient.Close()
 	slog.Info("Databases are initialized successfully!")
 
+	// Checking if ENV for password is set.
+	_, setPass := os.LookupEnv("SHORTENER_SECRET")
+	if !setPass {
+		slog.Error("Environment variable SHORTENER_SECRET is not set. Please set a secret for login.")
+		os.Exit(1)
+	}
+
 	r := router.SetupRouter(webLogger, storage)
 	err = r.Run(host + ":" + port)
 	if err != nil {

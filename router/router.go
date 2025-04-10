@@ -23,9 +23,10 @@ func SetupRouter(logger *slog.Logger, storage *store.Storage) *gin.Engine {
 
 func registerRoutes(engine *gin.Engine, model storageModel) {
 	engine.GET("/", getIndex)
-	engine.GET("/:digest", model.getURLEndpoint)
+	engine.GET("/:digest", model.getURL)
 	engine.GET("/admin/login", getLogin)
 	engine.POST("/admin/login", postLogin)
 	engine.GET("/admin/register", getRegisterURL)
 	engine.POST("/admin/register", model.postRegisterURL)
+	engine.NoRoute(notFound)
 }

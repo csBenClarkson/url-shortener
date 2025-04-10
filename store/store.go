@@ -165,12 +165,11 @@ func (s *Storage) getFromSqlite(ctx context.Context, digest string) (string, err
 // StoreURL sets up a mapping from the original URL to a generated digest, and store it into both databases.
 // It returns the digest and error.
 func (s *Storage) StoreURL(ctx context.Context, url string) (string, error) {
-	urlExist, err := s.checkURLExist(ctx, url)
+	urlExist, digest, err := s.checkURLExist(ctx, url)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrDBFails, err)
 	}
 
-	var digest string
 	if !urlExist {
 		digest = GenerateDigest(url)
 		digestExist, err := s.checkDigestExist(ctx, digest)
@@ -202,33 +201,34 @@ func (s *Storage) StoreURL(ctx context.Context, url string) (string, error) {
 		}
 
 	} else {
-		return "", ErrURLExists
+		return digest, ErrURLExists
 	}
 
 	return digest, nil
 }
 
-// checkURLExist check if a URL is in Sqlite3 database, return a boolean and an error.
+// checkURLExist check if a URL is in Sqlite3 database, return a boolean, the digest (if exists),and an error.
 // Error occurs only when database connection goes wrong.
 // The value of the boolean should be omitted if error occurs.
-func (s *Storage) checkURLExist(ctx context.Context, url string) (bool, error) {
-	urlBFExist, err := s.RedisClient.BFExists(ctx, "url_filter", url).Result()
+func (s *Storage) checkURLExist(ctx context.Context, url string) (bool, string, error) {
+	urlBFExist, err := s.RedisClient.BFExists(ctx, redisNamespace+"url_filter", url).Result()
 	if err != nil {
-		return true, err
+		return true, "", err
 	}
 
 	if urlBFExist {
-		err = s.SqliteClient.QueryRowContext(ctx, "SELECT url FROM shortener WHERE url = ?", url).Scan()
+		var digest string
+		err = s.SqliteClient.QueryRowContext(ctx, "SELECT digest FROM shortener WHERE url = ?", url).Scan(&digest)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return false, nil
+				return false, "", nil
 			}
-			return true, err
+			return true, "", err
 		} else {
-			return true, nil
+			return true, digest, nil
 		}
 	} else {
-		return false, nil
+		return false, "", nil
 	}
 }
 
@@ -236,7 +236,7 @@ func (s *Storage) checkURLExist(ctx context.Context, url string) (bool, error) {
 // Error occurs only when database connection goes wrong.
 // The value of the boolean should be omitted if error occurs.
 func (s *Storage) checkDigestExist(ctx context.Context, digest string) (bool, error) {
-	digestBFExist, err := s.RedisClient.BFExists(ctx, "digest_filter", digest).Result()
+	digestBFExist, err := s.RedisClient.BFExists(ctx, redisNamespace+"digest_filter", digest).Result()
 	if err != nil {
 		return false, err
 	}
@@ -263,5 +263,9 @@ func (s *Storage) storeToSqlite(ctx context.Context, url string, digest string, 
 
 func (s *Storage) storeToRedis(ctx context.Context, url string, digest string) error {
 	err := s.RedisClient.Set(ctx, redisNamespace+digest, url, 2*time.Hour).Err()
+	if err != nil {
+		return err
+	}
+	err = s.RedisClient.BFAdd(ctx, redisNamespace+"url_filter", url).Err()
 	return err
 }
