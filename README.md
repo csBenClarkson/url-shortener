@@ -24,9 +24,9 @@ cd url-shortener
 go mod tidy
 ```
 
-4. Run the server with default settings
+4. Run the server with default settings and password
 ```
-go run .
+SHORTENER_SECRET=<YOUR_PASSWORD> go run .
 ```
 
 ## Usage
@@ -35,7 +35,7 @@ You can configurate the Redis server address, sqlite3 database file location, ho
 You can also build the binary and run it.
 ```
 go build .
-./url-shortener [...argument]
+SHORTENER_SECRET=<YOUR_PASSWORD> ./url-shortener [...argument]
 ```
 
 ## License
